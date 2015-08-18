@@ -8,7 +8,8 @@
 # ---------
 # Changelog
 # ---------
-script_version = '0.2.4'
+script_version = '0.2.5'
+# 0.2.5 - Added configurable wait time
 # 0.2.4 - Added outputting current time on messages
 # 0.2.3 - Server won't start unless it's stopped
 #       - Refactored a bit to simplify the code
@@ -33,8 +34,11 @@ import urllib.request
 
 ########
 # Config
+# ------
 # server_type can be either 'snapshot' or 'release'
 server_type = 'snapshot'
+# wait_time is the time to wait until checking for an update (in minutes)
+wait_time = 60 
 ########################
 
 server = ''
@@ -43,7 +47,7 @@ server_stopped = True
 
 # Send output to console
 def m(message):
-	print('[' + datetime.datetime.now().strftime('%H:%M:%S') + '] [rs.py - ' + script_version + ']: ' + message)
+	print('[' + datetime.datetime.now().strftime('%H:%M:%S') + '] [r-mc-s.py - ' + script_version + ']: ' + message)
 
 # Send command to server
 def c(command):
@@ -121,8 +125,8 @@ while True:
 		version_check()
 		update_server()
 		start_server()
-		m('Going to sleep for one hour...')
-		time.sleep(3600) # wait 1 hour
+		m('Going to sleep for ' + str(wait_time) + ' minutes...')
+		time.sleep(wait_time * 60) # wait time
 		m('Waking up to check for updates...')
 
 	except KeyboardInterrupt:
