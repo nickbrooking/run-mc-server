@@ -10,6 +10,7 @@
 # ---------
 script_version = '0.2.5'
 # 0.2.5 - Added configurable wait time
+#       - Added setting window title
 # 0.2.4 - Added outputting current time on messages
 # 0.2.3 - Server won't start unless it's stopped
 #       - Refactored a bit to simplify the code
@@ -119,6 +120,7 @@ def stop_server(now):
 	time.sleep(10) # wait 10 more seconds to let things cool down
 
 # Main execution loop
+os.system('title ' + '[r-mc-s.py - ' + script_version + ']')
 m('Starting exectution...')
 while True:
 	try:
