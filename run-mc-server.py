@@ -2,13 +2,16 @@
 # run-mc-server.py
 # -------------
 # Script for running a minecraft server with auto-update functionality.
-# Tested on Windows but *should* work on other OS's with slight tweaks. 
+# Tested on Windows and Ubuntu but *should* work on other OS's (Mac). 
 # For Python 3.x.
 #
 # ---------
 # Changelog
 # ---------
-script_version = '0.2.5'
+script_version = '0.3'
+# 0.3   - Added support for mac/linux
+#       - Added configurable ram allocation for the server
+#       - Fixed crash if you try to stop server before it's started
 # 0.2.5 - Added configurable wait time
 #       - Added setting window title
 # 0.2.4 - Added outputting current time on messages
@@ -39,7 +42,9 @@ import urllib.request
 # server_type can be either 'snapshot' or 'release'
 server_type = 'snapshot'
 # wait_time is the time to wait until checking for an update (in minutes)
-wait_time = 60 
+wait_time = 60
+# ram_alloc is the amount of ram (in MB) to allocate to the server
+ram_alloc = 2048
 ########################
 
 server = ''
@@ -69,7 +74,8 @@ def version_check():
 
 def update_server():
 	if version_updated:
-		stop_server(False)
+		if not server_stopped:
+			stop_server(False)
 		m('Updating server.jar, please wait...')
 		shutil.copy2('versions_new.json','versions.json')
 
@@ -91,7 +97,15 @@ def start_server():
 	
 	if server_stopped:
 		m('Starting server...')
-		server = subprocess.Popen('start /I /B java -Xmx2048m -Xms2048m -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
+		if os.name is 'nt':
+			# we are running under windows
+			server = subprocess.Popen('start /I /B java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
+		elif os.name is 'posix':
+			# we are running under mac/linux
+			server = subprocess.Popen('java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
+		else:
+			m('Unable to detect which OS you are running, exiting...')
+			sys.exit(0)
 		server_stopped = False
 
 def stop_server(now):
@@ -119,9 +133,17 @@ def stop_server(now):
 
 	time.sleep(10) # wait 10 more seconds to let things cool down
 
+# -------------------
 # Main execution loop
-os.system('title ' + '[r-mc-s.py - ' + script_version + ']')
+# -------------------
+# set window title
+if os.name is 'nt':
+	os.system('title ' + '[r-mc-s.py - ' + script_version + ']')
+elif os.name is 'posix':
+	sys.stdout.write('\x1b]2;[r-mc-s.py - ' + script_version + ']\x07')
+
 m('Starting exectution...')
+
 while True:
 	try:
 		version_check()
