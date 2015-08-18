@@ -1,8 +1,10 @@
 ###############
-# run_server.py
+# run-mc-server.py
 # -------------
 # Script for running a minecraft server with auto-update functionality.
-# Tested on Windows but *should* work on other OS's. For Python 3.x.
+# Tested on Windows but *should* work on other OS's with slight tweaks. 
+# For Python 3.x.
+#
 # ---------
 # Changelog
 # ---------
