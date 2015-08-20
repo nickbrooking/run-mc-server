@@ -139,7 +139,8 @@ def update_server():
 	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/' + version + '/minecraft_server.' + version + '.jar', 'server.jar');
 
 	# Create a backup of the world before we go on and start the new server
-	backup_world()
+	if backups:
+		backup_world()
 
 def start_server():
 	global server
@@ -202,7 +203,7 @@ while True:
 		m('Going to sleep for ' + str(wait_time) + ' minutes...')
 		time.sleep(wait_time * 60) # wait time
 		m('Waking up to check for updates...')
-		if backup_at_wait_time:
+		if backups and backup_at_wait_time:
 			backup_world()
 
 	except KeyboardInterrupt:
