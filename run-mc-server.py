@@ -1,4 +1,4 @@
-###############
+##################
 # run-mc-server.py
 # -------------
 # Script for running a minecraft server with auto-update functionality.
@@ -8,7 +8,9 @@
 # ---------
 # Changelog
 # ---------
-script_version = '0.3'
+script_version = '0.3.1'
+# 0.3.1 - Added backing up world before updating
+#       - Added checking to see if server.jar still exists
 # 0.3   - Added support for mac/linux
 #       - Added configurable ram allocation for the server
 #       - Fixed crash if you try to stop server before it's started
@@ -35,6 +37,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import zipfile
 
 ########
 # Config
@@ -45,12 +48,29 @@ server_type = 'snapshot'
 wait_time = 60
 # ram_alloc is the amount of ram (in MB) to allocate to the server
 ram_alloc = 2048
-########################
+# backups is whether or not you want backups
+backups = True
+# backup_at_wait_time is if you want a backup to be created every 'wait_time'
+# Set to false by default as it could really fill your hard drive if you set your wait_time too low
+backup_at_wait_time = False
+# world_name is the name of your world, for backup purposes
+world_name = 'world'
+# backups_dir is the name of your backups folder
+backups_dir = 'backups'
+#######################
 
+##################
+# Global Variables
+# ----------------
 server = ''
+version = ''
 version_updated = False
 server_stopped = True
+#####################
 
+##################
+# Helper Functions
+# ----------------
 # Send output to console
 def m(message):
 	print('[' + datetime.datetime.now().strftime('%H:%M:%S') + '] [r-mc-s.py - ' + script_version + ']: ' + message)
@@ -62,34 +82,64 @@ def c(command):
 	server.stdin.write((command + '\n').encode())
 	server.stdin.flush()
 
+def zipdir(path, ziph):
+	for root, dirs, files in os.walk(world_name):
+		for file in files:
+			ziph.write(os.path.join(root, file))
+
+def get_mc_version():
+	global version
+
+	with open('versions.json') as versions_file:
+		versions = json.load(versions_file)
+
+	if server_type == 'snapshot':
+		version = versions["latest"]["snapshot"]
+	else:
+		version = versions["latest"]["release"]
+###############################################
+
+################
+# Main Functions
+# --------------
 def version_check():
 	global version_updated
 
 	m('Checking to see if update is needed...')
 	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/versions.json', 'versions_new.json');
-	if not os.path.exists('versions.json') or not filecmp.cmp('versions_new.json','versions.json'):
-		version_updated = True
+	if not os.path.exists('versions.json') or not os.path.exists('server.jar') or not filecmp.cmp('versions_new.json','versions.json'):
+		update_server()
 	else:
-		version_updated = False
+		get_mc_version() # get current version here just so we have it
+		m('Server already up to date. No update needed.')
+
+def backup_world():
+	if not server_stopped:
+		c('say Backing up world.')
+
+	m('Creating a backup of the world...')
+	if not os.path.exists(backups_dir):
+		os.makedirs(backups_dir)
+	zipf = zipfile.ZipFile(backups_dir + '/' + world_name + '_' + version + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.zip', 'w')
+	zipdir(world_name + '/', zipf)
+	zipf.close()
+	m('Backup created.')
 
 def update_server():
-	if version_updated:
-		if not server_stopped:
-			stop_server(False)
-		m('Updating server.jar, please wait...')
-		shutil.copy2('versions_new.json','versions.json')
+	global version
 
-		with open('versions.json') as versions_file:
-			versions = json.load(versions_file)
+	if not server_stopped:
+		stop_server(False)
+	m('Updating server.jar, please wait...')
+	shutil.copy2('versions_new.json','versions.json')
 
-		if server_type == 'snapshot':
-			version = versions["latest"]["snapshot"]
-		else:
-			version = versions["latest"]["release"]
+	# get the version from the new json file
+	get_mc_version()
 
-		urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/' + version + '/minecraft_server.' + version + '.jar', 'server.jar');
-	else:
-		m('Server already up to date. No update needed.')
+	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/' + version + '/minecraft_server.' + version + '.jar', 'server.jar');
+
+	# Create a backup of the world before we go on and start the new server
+	backup_world()
 
 def start_server():
 	global server
@@ -132,8 +182,9 @@ def stop_server(now):
 		server_stopped = True
 
 	time.sleep(10) # wait 10 more seconds to let things cool down
+##################
 
-# -------------------
+#####################
 # Main execution loop
 # -------------------
 # set window title
@@ -147,13 +198,15 @@ m('Starting exectution...')
 while True:
 	try:
 		version_check()
-		update_server()
 		start_server()
 		m('Going to sleep for ' + str(wait_time) + ' minutes...')
 		time.sleep(wait_time * 60) # wait time
 		m('Waking up to check for updates...')
+		if backup_at_wait_time:
+			backup_world()
 
 	except KeyboardInterrupt:
 		stop_server(True)
 		m('Exiting...')
 		sys.exit(0)
+###################
