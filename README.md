@@ -6,6 +6,7 @@ Place script in a blank directory (to start a new server) or an existing minecra
 
 "python run-mc-server.py"
 (might need to use "python3 run-mc-server.py" if you have python 2 installed as well)
-ctrl-c to kill the server, which should stop it safely. Sometimes you may see an exception when shutting down or between updates, that is a current Minecraft server bug, listed here: https://bugs.mojang.com/browse/MC-38134
+
+Press ctrl-c to kill the server, which should stop it safely. Sometimes you may see an exception when shutting down or between updates, that is a current Minecraft server bug, listed here: https://bugs.mojang.com/browse/MC-38134
 
 TODO: Add ability to enter commands manually from the console to the server.
