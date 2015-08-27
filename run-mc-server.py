@@ -8,7 +8,8 @@
 # ---------
 # Changelog
 # ---------
-script_version = '0.3.1'
+script_version = '0.3.2'
+# 0.3.2 - Moved backup to before getting new version
 # 0.3.1 - Added backing up world before updating
 #       - Added checking to see if server.jar still exists
 # 0.3   - Added support for mac/linux
@@ -118,12 +119,15 @@ def backup_world():
 		c('say Backing up world.')
 
 	m('Creating a backup of the world...')
-	if not os.path.exists(backups_dir):
-		os.makedirs(backups_dir)
-	zipf = zipfile.ZipFile(backups_dir + '/' + world_name + '_' + version + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.zip', 'w')
-	zipdir(world_name + '/', zipf)
-	zipf.close()
-	m('Backup created.')
+	try:
+		if not os.path.exists(backups_dir):
+			os.makedirs(backups_dir)
+		zipf = zipfile.ZipFile(backups_dir + '/' + world_name + '_' + version + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.zip', 'w')
+		zipdir(world_name + '/', zipf)
+		zipf.close()
+		m('Backup created.')
+	except:
+		m('Unable to create backup.')
 
 def update_server():
 	global version
@@ -132,15 +136,15 @@ def update_server():
 		stop_server(False)
 	m('Updating server.jar, please wait...')
 	shutil.copy2('versions_new.json','versions.json')
+	
+	# Create a backup of the world before we go on and start the new server
+	if backups:
+		backup_world()
 
 	# get the version from the new json file
 	get_mc_version()
 
 	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/' + version + '/minecraft_server.' + version + '.jar', 'server.jar');
-
-	# Create a backup of the world before we go on and start the new server
-	if backups:
-		backup_world()
 
 def start_server():
 	global server
