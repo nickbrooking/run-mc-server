@@ -107,7 +107,7 @@ def version_check():
 	global version_updated
 
 	m('Checking to see if update is needed...')
-	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/versions.json', 'versions_new.json');
+	urllib.request.urlretrieve('https://launchermeta.mojang.com/mc/game/version_manifest.json', 'versions_new.json');
 	if not os.path.exists('versions.json') or not os.path.exists('server.jar') or not filecmp.cmp('versions_new.json','versions.json'):
 		update_server()
 	else:
