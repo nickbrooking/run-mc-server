@@ -2,13 +2,14 @@
 # run-mc-server.py
 # -------------
 # Script for running a minecraft server with auto-update functionality.
-# Tested on Windows and Ubuntu but *should* work on other OS's (Mac). 
+# Tested on Windows and Ubuntu but *should* work on other OS's (Mac).
 # For Python 3.x.
 #
 # ---------
 # Changelog
 # ---------
-script_version = '0.3.2'
+script_version = '0.3.3'
+# 0.3.3 - Updated to work with new json file and format from Mojang
 # 0.3.2 - Moved backup to before getting new version
 # 0.3.1 - Added backing up world before updating
 #       - Added checking to see if server.jar still exists
@@ -28,7 +29,6 @@ script_version = '0.3.2'
 # -------------
 # Nick Brooking
 ###############
-
 import datetime
 import filecmp
 import json
@@ -44,15 +44,16 @@ import zipfile
 # Config
 # ------
 # server_type can be either 'snapshot' or 'release'
-server_type = 'snapshot'
+server_type = 'release'
 # wait_time is the time to wait until checking for an update (in minutes)
 wait_time = 60
 # ram_alloc is the amount of ram (in MB) to allocate to the server
-ram_alloc = 2048
+ram_alloc = 4096
 # backups is whether or not you want backups
 backups = True
 # backup_at_wait_time is if you want a backup to be created every 'wait_time'
-# Set to false by default as it could really fill your hard drive if you set your wait_time too low
+# Set to false by default as it could really fill your hard drive if you set
+# your wait_time too low
 backup_at_wait_time = False
 # world_name is the name of your world, for backup purposes
 world_name = 'world'
@@ -65,6 +66,7 @@ backups_dir = 'backups'
 # ----------------
 server = ''
 version = ''
+server_url = ''
 version_updated = False
 server_stopped = True
 #####################
@@ -74,119 +76,142 @@ server_stopped = True
 # ----------------
 # Send output to console
 def m(message):
-	print('[' + datetime.datetime.now().strftime('%H:%M:%S') + '] [r-mc-s.py - ' + script_version + ']: ' + message)
+    print('[' + datetime.datetime.now().strftime('%H:%M:%S') + '] [r-mc-s.py - ' + script_version + ']: ' + message)
 
 # Send command to server
 def c(command):
-	global server
+    global server
 
-	server.stdin.write((command + '\n').encode())
-	server.stdin.flush()
+    server.stdin.write((command + '\n').encode())
+    server.stdin.flush()
 
 def zipdir(path, ziph):
-	for root, dirs, files in os.walk(world_name):
-		for file in files:
-			ziph.write(os.path.join(root, file))
+    for root, dirs, files in os.walk(world_name):
+        for file in files:
+            ziph.write(os.path.join(root, file))
 
 def get_mc_version():
-	global version
+    global version
 
-	with open('versions.json') as versions_file:
-		versions = json.load(versions_file)
+    with open('versions.json') as versions_file:
+        versions = json.load(versions_file)
 
-	if server_type == 'snapshot':
-		version = versions["latest"]["snapshot"]
-	else:
-		version = versions["latest"]["release"]
+    if server_type == 'snapshot':
+        version = versions["latest"]["snapshot"]
+    else:
+        version = versions["latest"]["release"]
+
+def get_mc_server_url():
+    global version
+    global server_url
+    version_json = ''
+
+    with open('versions.json') as versions_file:
+        versions = json.load(versions_file)
+
+    for version_entry in versions["versions"]:
+        if version_entry["id"] == version and version_entry["type"] == server_type:
+            version_json = version_entry["url"]
+            break
+
+    if version_json is not '':
+        urllib.request.urlretrieve(version_json, 'version.json')
+        with open('version.json') as version_file:
+            version_json_file = json.load(version_file)
+            server_url = version_json_file["downloads"]["server"]["url"]
 ###############################################
 
 ################
 # Main Functions
 # --------------
 def version_check():
-	global version_updated
+    global version_updated
 
-	m('Checking to see if update is needed...')
-	urllib.request.urlretrieve('https://launchermeta.mojang.com/mc/game/version_manifest.json', 'versions_new.json');
-	if not os.path.exists('versions.json') or not os.path.exists('server.jar') or not filecmp.cmp('versions_new.json','versions.json'):
-		update_server()
-	else:
-		get_mc_version() # get current version here just so we have it
-		m('Server already up to date. No update needed.')
+    m('Checking to see if update is needed...')
+    urllib.request.urlretrieve('https://launchermeta.mojang.com/mc/game/version_manifest.json', 'versions_new.json')
+    if not os.path.exists('versions.json') or not os.path.exists('server.jar') or not filecmp.cmp('versions_new.json','versions.json'):
+        update_server()
+    else:
+        get_mc_version() # get current version here just so we have it
+        m('Server already up to date. No update needed.')
 
 def backup_world():
-	if not server_stopped:
-		c('say Backing up world.')
+    if not server_stopped:
+        c('say Backing up world.')
 
-	m('Creating a backup of the world...')
-	try:
-		if not os.path.exists(backups_dir):
-			os.makedirs(backups_dir)
-		zipf = zipfile.ZipFile(backups_dir + '/' + world_name + '_' + version + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.zip', 'w')
-		zipdir(world_name + '/', zipf)
-		zipf.close()
-		m('Backup created.')
-	except:
-		m('Unable to create backup.')
+    m('Creating a backup of the world...')
+    try:
+        if not os.path.exists(backups_dir):
+            os.makedirs(backups_dir)
+        zipf = zipfile.ZipFile(backups_dir + '/' + world_name + '_' + version + '_' + datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.zip', 'w')
+        zipdir(world_name + '/', zipf)
+        zipf.close()
+        m('Backup created.')
+    except:
+        m('Unable to create backup.')
 
 def update_server():
-	global version
+    global version
+    global server_url
 
-	if not server_stopped:
-		stop_server(False)
-	m('Updating server.jar, please wait...')
-	shutil.copy2('versions_new.json','versions.json')
-	
-	# Create a backup of the world before we go on and start the new server
-	if backups:
-		backup_world()
+    if not server_stopped:
+        stop_server(False)
+    m('Updating server.jar, please wait...')
+    shutil.copy2('versions_new.json','versions.json')
+    
+    # Create a backup of the world before we go on and start the new server
+    if backups:
+        backup_world()
 
-	# get the version from the new json file
-	get_mc_version()
+    # get the version from the new json file
+    get_mc_version()
 
-	urllib.request.urlretrieve('https://s3.amazonaws.com/Minecraft.Download/versions/' + version + '/minecraft_server.' + version + '.jar', 'server.jar');
+    # get the server url from the version json file
+    get_mc_server_url()
+
+    urllib.request.urlretrieve(server_url, 'server.jar')
 
 def start_server():
-	global server
-	global server_stopped
-	
-	if server_stopped:
-		m('Starting server...')
-		if os.name is 'nt':
-			# we are running under windows
-			server = subprocess.Popen('start /I /B java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
-		elif os.name is 'posix':
-			# we are running under mac/linux
-			server = subprocess.Popen('java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
-		else:
-			m('Unable to detect which OS you are running, exiting...')
-			sys.exit(0)
-		server_stopped = False
+    global server
+    global server_stopped
+    
+    if server_stopped:
+        m('Starting server...')
+        if os.name is 'nt':
+            # we are running under windows
+            server = subprocess.Popen('start /I /B java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
+        elif os.name is 'posix':
+            # we are running under mac/linux
+            server = subprocess.Popen('java -Xmx' + str(ram_alloc) + 'm -Xms' + str(ram_alloc) + 'm -jar server.jar nogui', stdin=subprocess.PIPE, shell=True)
+        else:
+            m('Unable to detect which OS you are running, exiting...')
+            sys.exit(0)
+        server_stopped = False
 
 def stop_server(now):
-	global server
-	global server_stopped
+    global server
+    global server_stopped
 
-	m('Server stopping...')
+    m('Server stopping...')
 
-	if now:
-		c('stop')
-		time.sleep(10)
-		server.kill()
-		server_stopped = True
-	else:
-		c('say The server is going down for update in 5 minutes!')
-		time.sleep(240) # wait 4 minutes
-		c('say The server is going down for update in 1 minute!')
-		time.sleep(5) # wait a few seconds in between messages
-		c('say The server will be back up shortly.')
-		time.sleep(60) # wait one minute
-		c('stop')
-		time.sleep(10)
-		server.kill()
-		server_stopped = True
+    if now:
+        c('stop')
+        time.sleep(10)
+        server.kill()
+        server_stopped = True
+    else:
+        c('say The server is going down for update in 5 minutes!')
+        time.sleep(240) # wait 4 minutes
+        c('say The server is going down for update in 1 minute!')
+        time.sleep(5) # wait a few seconds in between messages
+        c('say The server will be back up shortly.')
+        time.sleep(60) # wait one minute
+        c('stop')
+        time.sleep(10)
+        server.kill()
+        server_stopped = True
 
-	time.sleep(10) # wait 10 more seconds to let things cool down
+    time.sleep(10) # wait 10 more seconds to let things cool down
 ##################
 
 #####################
@@ -194,24 +219,23 @@ def stop_server(now):
 # -------------------
 # set window title
 if os.name is 'nt':
-	os.system('title ' + '[r-mc-s.py - ' + script_version + ']')
+    os.system('title ' + '[r-mc-s.py - ' + script_version + ']')
 elif os.name is 'posix':
-	sys.stdout.write('\x1b]2;[r-mc-s.py - ' + script_version + ']\x07')
+    sys.stdout.write('\x1b]2;[r-mc-s.py - ' + script_version + ']\x07')
 
 m('Starting exectution...')
 
 while True:
-	try:
-		version_check()
-		start_server()
-		m('Going to sleep for ' + str(wait_time) + ' minutes...')
-		time.sleep(wait_time * 60) # wait time
-		m('Waking up to check for updates...')
-		if backups and backup_at_wait_time:
-			backup_world()
+    try:
+        version_check()
+        start_server()
+        m('Going to sleep for ' + str(wait_time) + ' minutes...')
+        time.sleep(wait_time * 60) # wait time
+        m('Waking up to check for updates...')
+        if backups and backup_at_wait_time:
+            backup_world()
 
-	except KeyboardInterrupt:
-		stop_server(True)
-		m('Exiting...')
-		sys.exit(0)
-###################
+    except KeyboardInterrupt:
+        stop_server(True)
+        m('Exiting...')
+        sys.exit(0)
